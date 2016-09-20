@@ -1,6 +1,6 @@
 from __future__ import unicode_literals
-from django.shortcuts import render
-from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponse, JsonResponse, Http404
 import json
 import youtube_dl
 import requests
@@ -18,7 +18,7 @@ from Queue import Queue
 import grequests
 import subprocess
 import re
-
+from models import Video
 
 url = 'https://stream.watsonplatform.net/speech-to-text/api/v1/recognize?continuous=true&timestamps=true'
 username = '040c9c9a-791a-4a22-9989-d1c891148d96'
@@ -38,6 +38,7 @@ num_txt_files = 0
 
 #TODO
 #have global variable here that will hold the index of the video
+#create if/else action dependent upon whether URL has been indexed or not. 
 
 # Create your views here.
 
@@ -147,6 +148,13 @@ def rename_wav(where, rename_to):
 
 
 def check_index(request):
+	try:
+		link = request.GET.get('link')
+		requested_url = Video.objects.get(pk=link)
+		print "Youtube URL: " + link + "Transcript: " + requested_url.transcript
+	except Video.DoesNotExist:
+		requested_url = None
+		print "URL has not been indexed"
 	#This function should be called when /video_process/checkindex is hit.
 	#It should do the following:
 	####check the db if the link sent is in the db of indexes
@@ -218,7 +226,7 @@ def check_index(request):
 				current_line = content[index].split()
 				current_line.append(i*2)
 				w.append(current_line)
-
+	create_new_entry(link, w)
 	return HttpResponse(json.dumps(w), content_type="application/json")
 
 def process_search_term(request):
@@ -256,3 +264,8 @@ def process_search_term(request):
 	# 		words.append(request.GET.get('w%d' % i))
 
 	return HttpResponse(json.dumps(result))
+
+#Method takes in an object from Watson inclusive of URL, transcript string, and timestamps
+def create_new_entry(url_provided, transcript_provided):
+	today = datetime.datetime.now()
+	newEntry = Video.objects.create(url=url_provided, transcript=transcript_provided, pub_date=today)
